@@ -44,10 +44,10 @@ inputs:
     description: "The ID of the Spacelift run"
   deploy_name:
     required: false
-    description: "The name of the deployment"
+    description: "The name of the deployment (passed to the run as TF_VAR_deploy_name)"
   deploy_url:
     required: false
-    description: "The URL of the deployment"
+    description: "The URL of the deployment (passed to the run as TF_VAR_deploy_url)"
   run_metadata:
     required: false
     description: "A value to be included in the Spacelift run metadata"
@@ -112,15 +112,27 @@ runs:
         BLOCKING_STATUSES: ${{ inputs.blocking_statuses }}
         STACK_ID: ${{ inputs.stack_id }}
         TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
-        TF_VAR_deploy_name: |-
-          ${{ inputs.deploy_name }}
-        TF_VAR_deploy_url: |-
-          ${{ inputs.deploy_url }}
       run: |
         TIMEOUT_SECONDS=$(( TIMEOUT_MINUTES * 60 ))
         RUNNING_STATUSES='["QUEUED","INITIALIZING","PLANNING","APPLYING","PREPARING","PREPARING_APPLY","READY","UNCONFIRMED"]'
         RUN_ID=""
         RUN_STATUS=""
+        RUNTIME_CONFIG_ARGS=""
+
+        # Generate runtime config file if deploy info is provided
+        if [[ -n "${{ inputs.deploy_name }}" || -n "${{ inputs.deploy_url }}" ]]; then
+          RUNTIME_CONFIG_FILE=$(mktemp)
+          echo "environment:" > "$RUNTIME_CONFIG_FILE"
+          if [[ -n "${{ inputs.deploy_name }}" ]]; then
+            echo "  TF_VAR_deploy_name: \"${{ inputs.deploy_name }}\"" >> "$RUNTIME_CONFIG_FILE"
+          fi
+          if [[ -n "${{ inputs.deploy_url }}" ]]; then
+            echo "  TF_VAR_deploy_url: \"${{ inputs.deploy_url }}\"" >> "$RUNTIME_CONFIG_FILE"
+          fi
+          RUNTIME_CONFIG_ARGS="--runtime-config $RUNTIME_CONFIG_FILE"
+          echo "Generated runtime config:"
+          cat "$RUNTIME_CONFIG_FILE"
+        fi
 
         # Get the list of runs to understand the stack's state
         echo "Fetching stack runs..."
@@ -160,9 +172,9 @@ runs:
           echo "No in-progress runs found, triggering a run..."
           spacectl stack set-current-commit --sha $COMMIT_SHA --id $STACK_ID
           if [[ "$RUN_METADATA" == '' ]]; then
-            spacectl stack deploy --id $STACK_ID
+            spacectl stack deploy --id $STACK_ID $RUNTIME_CONFIG_ARGS
           else
-            spacectl stack deploy --id $STACK_ID --run-metadata "$RUN_METADATA"
+            spacectl stack deploy --id $STACK_ID --run-metadata "$RUN_METADATA" $RUNTIME_CONFIG_ARGS
           fi
         else
           echo "In-progress run found"
