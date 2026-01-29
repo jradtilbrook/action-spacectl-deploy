@@ -42,6 +42,12 @@ inputs:
   run_id:
     required: false
     description: "The ID of the Spacelift run"
+  deploy_name:
+    required: false
+    description: "The name of the deployment"
+  deploy_url:
+    required: false
+    description: "The URL of the deployment"
   run_metadata:
     required: false
     description: "A value to be included in the Spacelift run metadata"
@@ -106,6 +112,8 @@ runs:
         BLOCKING_STATUSES: ${{ inputs.blocking_statuses }}
         STACK_ID: ${{ inputs.stack_id }}
         TIMEOUT_MINUTES: ${{ inputs.timeout_minutes }}
+        TF_VAR_deploy_name: ${{ inputs.deploy_name }}
+        TF_VAR_deploy_url: ${{ inputs.deploy_url }}
       run: |
         TIMEOUT_SECONDS=$(( TIMEOUT_MINUTES * 60 ))
         RUNNING_STATUSES='["QUEUED","INITIALIZING","PLANNING","APPLYING","PREPARING","PREPARING_APPLY","READY","UNCONFIRMED"]'
